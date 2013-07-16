@@ -54,13 +54,16 @@ public class EchoDns implements NameServiceDescriptor {
             Object impl;
             Method lookupAllHostAddrMeth;
 
-            InetAddress[] nativeLookupAllHostAddr(String s) {
+            InetAddress[] nativeLookupAllHostAddr(String s) throws UnknownHostException {
                 try {
                     return (InetAddress[]) lookupAllHostAddrMeth.invoke(impl, s);
                 } catch (IllegalAccessException e) {
                     throw new IllegalStateException(e);
                 } catch (InvocationTargetException e) {
-                    throw new IllegalStateException(e);
+                    if (e.getTargetException().getClass().equals(UnknownHostException.class)) {
+                        throw (UnknownHostException)e.getTargetException();
+                    }
+                    throw new RuntimeException(e.getTargetException());
                 }
             }
 
@@ -80,7 +83,12 @@ public class EchoDns implements NameServiceDescriptor {
                     "(" + Pattern.quote(suffix) + ")?");
             @Override
             public InetAddress[] lookupAllHostAddr(String s) throws UnknownHostException {
-                if (hostname.equals(s)) {
+                if (hostname.equals(s) || hostname.equals("localhost")) {
+                    try {
+                        return nativeLookupAllHostAddr(s);
+                    } catch (UnknownHostException uhe) {
+                        // if native resolution didn't work - try others
+                    }
                     UnknownHostException uhe = null;
                     for (NameService ns : otherNs) {
                         try {
