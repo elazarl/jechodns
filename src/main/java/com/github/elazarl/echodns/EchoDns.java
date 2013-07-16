@@ -3,9 +3,15 @@ package com.github.elazarl.echodns;
 import sun.net.spi.nameservice.NameService;
 import sun.net.spi.nameservice.NameServiceDescriptor;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ServiceLoader;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,12 +43,54 @@ import java.util.regex.Pattern;
 public class EchoDns implements NameServiceDescriptor {
     @Override
     public NameService createNameService() throws Exception {
+        ServiceLoader<NameServiceDescriptor> nsds = ServiceLoader.load(NameServiceDescriptor.class);
+        final List<NameService> otherNs = new ArrayList<NameService>();
+        for (NameServiceDescriptor nsd : nsds) {
+            if (nsd.getClass() == EchoDns.class) continue;
+            otherNs.add(nsd.createNameService());
+        }
         return new NameService() {
+            String hostname;
+            Object impl;
+            Method lookupAllHostAddrMeth;
+
+            InetAddress[] nativeLookupAllHostAddr(String s) {
+                try {
+                    return (InetAddress[]) lookupAllHostAddrMeth.invoke(impl, s);
+                } catch (IllegalAccessException e) {
+                    throw new IllegalStateException(e);
+                } catch (InvocationTargetException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+
+            {
+                Field f = InetAddress.class.getDeclaredField("impl");
+                f.setAccessible(true);
+                impl = f.get(null);
+                Method m = impl.getClass().getDeclaredMethod("getLocalHostName", new Class[]{});
+                m.setAccessible(true);
+                hostname = (String) m.invoke(impl);
+                lookupAllHostAddrMeth = impl.getClass().getDeclaredMethod("lookupAllHostAddr", new Class[]{String.class});
+                lookupAllHostAddrMeth.setAccessible(true);
+            }
+
             String suffix = System.getProperty("echodns.suffix", "");
             Pattern cannonicalIpRe = Pattern.compile("a(\\d+)-(\\d+)-(\\d+)-(\\d+)" +
                     "(" + Pattern.quote(suffix) + ")?");
             @Override
             public InetAddress[] lookupAllHostAddr(String s) throws UnknownHostException {
+                if (hostname.equals(s)) {
+                    UnknownHostException uhe = null;
+                    for (NameService ns : otherNs) {
+                        try {
+                            return ns.lookupAllHostAddr(s);
+                        } catch (UnknownHostException e) {
+                            uhe = e;
+                        }
+                    }
+                    throw uhe;
+                }
                 Matcher matcher = cannonicalIpRe.matcher(s);
                 if (matcher.matches()) {
                     return new InetAddress[] {
