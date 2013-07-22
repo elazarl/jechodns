@@ -85,7 +85,15 @@ public class EchoDns implements NameServiceDescriptor {
             public InetAddress[] lookupAllHostAddr(String s) throws UnknownHostException {
                 if (hostname.equals(s) || hostname.equals("localhost")) {
                     try {
-                        return nativeLookupAllHostAddr(s);
+                        final InetAddress[] nativeAddr = nativeLookupAllHostAddr(s);
+                        final InetAddress[] resolved = new InetAddress[nativeAddr.length];
+                        for (int i = 0; i < nativeAddr.length; i++) {
+                            final byte[] address = nativeAddr[i].getAddress();
+                            resolved[i] = InetAddress.getByAddress(
+                                    getHostByAddr(address),
+                                    address);
+                        }
+                        return resolved;
                     } catch (UnknownHostException uhe) {
                         // if native resolution didn't work - try others
                     }
