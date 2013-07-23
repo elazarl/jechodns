@@ -109,13 +109,15 @@ public class EchoDns implements NameServiceDescriptor {
                 }
                 Matcher matcher = cannonicalIpRe.matcher(s);
                 if (matcher.matches()) {
-                    return new InetAddress[] {
-                            InetAddress.getByName(
-                                    matcher.group(1) + "." +
+                    final InetAddress address = InetAddress.getByName(
+                            matcher.group(1) + "." +
                                     matcher.group(2) + "." +
                                     matcher.group(3) + "." +
                                     matcher.group(4)
-                            )
+                    );
+                    return new InetAddress[] {
+                            InetAddress.getByAddress(getHostByAddr(address.getAddress()),
+                                    address.getAddress())
                     };
                 }
                 throw new UnknownHostException("unknown host " + s);
