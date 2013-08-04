@@ -18,12 +18,14 @@ public class Resolver {
     public static void main(String[] args) {
         for (String arg : args) {
             try {
-                InetAddress address = InetAddress.getByName(arg);
-                String hostname = address.getCanonicalHostName();
-                if (hostname.equals(address.getHostAddress())) {
-                    hostname = address.getHostName() + "[!c]";
+                InetAddress[] addresses = InetAddress.getAllByName(arg);
+                for (InetAddress address : addresses) {
+                    String hostname = address.getCanonicalHostName();
+                    if (hostname.equals(address.getHostAddress())) {
+                        hostname = address.getHostName() + "[!c]";
+                    }
+                    System.out.println(arg + ": " + hostname + "/" + address.getHostAddress());
                 }
-                System.out.println(arg + ": " + hostname + "/" + address.getHostAddress());
             } catch (UnknownHostException e) {
                 System.out.println("Unknown host: " + arg);
             }

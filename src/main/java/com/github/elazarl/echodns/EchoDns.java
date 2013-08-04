@@ -83,7 +83,7 @@ public class EchoDns implements NameServiceDescriptor {
                     "(" + Pattern.quote(suffix) + ")?");
             @Override
             public InetAddress[] lookupAllHostAddr(String s) throws UnknownHostException {
-                if (hostname.equals(s) || hostname.equals("localhost")) {
+                if (s.equals(hostname) || s.equals("localhost")) {
                     try {
                         final InetAddress[] nativeAddr = nativeLookupAllHostAddr(s);
                         final InetAddress[] resolved = new InetAddress[nativeAddr.length];
@@ -116,21 +116,41 @@ public class EchoDns implements NameServiceDescriptor {
                                     matcher.group(4)
                     );
                     return new InetAddress[] {
-                            InetAddress.getByAddress(getHostByAddr(address.getAddress()),
+                            InetAddress.getByAddress(canonicalHostname(address),
                                     address.getAddress())
                     };
                 }
-                throw new UnknownHostException("unknown host " + s);
+                UnknownHostException uhe = null;
+                for (NameService nameService : otherNs) {
+                    try {
+                        return nameService.lookupAllHostAddr(s);
+                    } catch (UnknownHostException e) {
+                        uhe = e;
+                    }
+                }
+                throw uhe;
             }
 
             @Override
             public String getHostByAddr(byte[] bytes) throws UnknownHostException {
                 InetAddress address = InetAddress.getByAddress(bytes);
-                if (address instanceof Inet4Address) {
+                if (address instanceof Inet4Address && address.isSiteLocalAddress()) {
                     Inet4Address ipv4 = (Inet4Address) address;
-                    return "a" + ipv4.getHostAddress().replace('.', '-') + suffix;
+                    return canonicalHostname(ipv4);
                 }
-                return null;
+                UnknownHostException uhe = null;
+                for (NameService nameService : otherNs) {
+                    try {
+                        return nameService.getHostByAddr(bytes);
+                    } catch (UnknownHostException e) {
+                        uhe = e;
+                    }
+                }
+                throw uhe;
+            }
+
+            private String canonicalHostname(InetAddress address) {
+                return "a" + address.getHostAddress().replace('.', '-') + suffix;
             }
         };
     }
